@@ -1,0 +1,24 @@
+# OS & IDE stuff
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Node
+node_modules/
+npm-debug.log*
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# React build output
+dashboard/dist/
+
+# Postman
+postman_collection.json
