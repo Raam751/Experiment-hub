@@ -7,8 +7,19 @@ const morgan = require('morgan');
 const app = express();
 
 // Middleware
-app.use(helmet());                  // Sets security headers (X-Frame-Options, etc.)
-app.use(cors());                    // Allows cross-origin requests
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    process.env.FRONTEND_URL       // set this to your Vercel URL in production
+].filter(Boolean);
+
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 app.use(express.json());           // Parses JSON request bodies
 app.use(morgan('dev'));            // Logs: "POST /auth/login 200 12ms"
 

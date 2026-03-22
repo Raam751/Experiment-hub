@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { login, setToken } from '../api';
+import { login, register, setToken } from '../api';
 
 export default function LoginPage({ onLogin }) {
+  const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -12,9 +13,17 @@ export default function LoginPage({ onLogin }) {
     setError('');
     setLoading(true);
     try {
-      const data = await login(email, password);
-      setToken(data.token);
-      onLogin(data.user);
+      if (isRegister) {
+        // Register then auto-login
+        await register(email, password, 'admin');
+        const data = await login(email, password);
+        setToken(data.token);
+        onLogin(data.user);
+      } else {
+        const data = await login(email, password);
+        setToken(data.token);
+        onLogin(data.user);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -41,9 +50,16 @@ export default function LoginPage({ onLogin }) {
           </div>
           <button id="login-submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
             disabled={loading}>
-            {loading ? <span className="spinner" /> : 'Sign In'}
+            {loading ? <span className="spinner" /> : isRegister ? 'Create Account' : 'Sign In'}
           </button>
         </form>
+        <p style={{ textAlign: 'center', marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <span onClick={() => { setIsRegister(!isRegister); setError(''); }}
+            style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}>
+            {isRegister ? 'Sign In' : 'Register'}
+          </span>
+        </p>
       </div>
     </div>
   );
