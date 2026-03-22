@@ -5,15 +5,15 @@ const CACHE_TTL = 300; // 5 minutes
 
 /**
  * Get experiment config (experiment + variants) from cache.
- * Returns null on cache miss.
+ * Returns null on cache miss or if Redis is unavailable.
  */
 async function getExperimentConfig(experimentId) {
+    if (!redis) return null;
     try {
         const cached = await redis.get(`${CACHE_PREFIX}${experimentId}`);
         if (!cached) return null;
         return JSON.parse(cached);
     } catch (err) {
-        // Cache failures should not break the app — fall back to DB
         console.error('Cache read error:', err.message);
         return null;
     }
@@ -23,6 +23,7 @@ async function getExperimentConfig(experimentId) {
  * Store experiment config in cache.
  */
 async function setExperimentConfig(experimentId, config) {
+    if (!redis) return;
     try {
         await redis.set(
             `${CACHE_PREFIX}${experimentId}`,
@@ -40,6 +41,7 @@ async function setExperimentConfig(experimentId, config) {
  * Call this whenever experiment or its variants are updated.
  */
 async function invalidate(experimentId) {
+    if (!redis) return;
     try {
         await redis.del(`${CACHE_PREFIX}${experimentId}`);
     } catch (err) {
