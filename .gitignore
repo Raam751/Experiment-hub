@@ -22,3 +22,6 @@ dashboard/dist/
 
 # Postman
 postman_collection.json
+
+# Docker
+pgdata/

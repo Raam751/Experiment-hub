@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import { login, register, setToken } from '../api';
+import { useNavigate } from 'react-router-dom';
+import { login, register, setToken, isLoggedIn } from '../api';
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage() {
+  const navigate = useNavigate();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  if (isLoggedIn()) {
+    navigate('/', { replace: true });
+    return null;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,16 +21,11 @@ export default function LoginPage({ onLogin }) {
     setLoading(true);
     try {
       if (isRegister) {
-        // Register then auto-login
-        await register(email, password, 'admin');
-        const data = await login(email, password);
-        setToken(data.token);
-        onLogin(data.user);
-      } else {
-        const data = await login(email, password);
-        setToken(data.token);
-        onLogin(data.user);
+        await register(email, password);
       }
+      const data = await login(email, password);
+      setToken(data.token);
+      navigate('/', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

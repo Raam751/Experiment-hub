@@ -1,12 +1,9 @@
 const redis = require('../configs/redis');
+const logger = require('../configs/logger');
 
 const CACHE_PREFIX = 'exp:';
-const CACHE_TTL = 300; // 5 minutes
+const CACHE_TTL = 300;
 
-/**
- * Get experiment config (experiment + variants) from cache.
- * Returns null on cache miss or if Redis is unavailable.
- */
 async function getExperimentConfig(experimentId) {
     if (!redis) return null;
     try {
@@ -14,14 +11,11 @@ async function getExperimentConfig(experimentId) {
         if (!cached) return null;
         return JSON.parse(cached);
     } catch (err) {
-        console.error('Cache read error:', err.message);
+        logger.error({ err: err.message, experimentId }, 'Cache read error');
         return null;
     }
 }
 
-/**
- * Store experiment config in cache.
- */
 async function setExperimentConfig(experimentId, config) {
     if (!redis) return;
     try {
@@ -32,20 +26,16 @@ async function setExperimentConfig(experimentId, config) {
             CACHE_TTL
         );
     } catch (err) {
-        console.error('Cache write error:', err.message);
+        logger.error({ err: err.message, experimentId }, 'Cache write error');
     }
 }
 
-/**
- * Invalidate cached config for an experiment.
- * Call this whenever experiment or its variants are updated.
- */
 async function invalidate(experimentId) {
     if (!redis) return;
     try {
         await redis.del(`${CACHE_PREFIX}${experimentId}`);
     } catch (err) {
-        console.error('Cache invalidation error:', err.message);
+        logger.error({ err: err.message, experimentId }, 'Cache invalidation error');
     }
 }
 

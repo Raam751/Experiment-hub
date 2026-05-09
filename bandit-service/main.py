@@ -24,18 +24,7 @@ def optimize_experiment(request: OptimizeRequest):
     """
     if len(request.variants) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 variants to optimize")
-        
-    # Convert Pydantic models to dicts for our Thompson logic
-    metrics_data = [
-        {
-            "variant_id": v.variant_id, 
-            "exposures": v.exposures, 
-            "conversions": v.conversions
-        } 
-        for v in request.variants
-    ]
     
-    # Calculate new optimal weights
     new_weights_dict = calculate_thompson_weights(request.variants)
     
     # Format the updated weights for the response

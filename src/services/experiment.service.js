@@ -1,4 +1,5 @@
 const experimentRepository = require('../repositories/experiment.repository');
+const variantRepository = require('../repositories/variant.repository');
 const { canTransition, getAllowedTransitions } = require('../utils/stateMachine');
 const cacheService = require('./cache.service');
 
@@ -42,7 +43,7 @@ async function updateMetadata(id, updates) {
 }
 
 async function updateStatus(id, newStatus) {
-    const experiment = await findById(id); // throws 404 if not found
+    const experiment = await findById(id);
 
     if (!canTransition(experiment.status, newStatus)) {
         const allowed = getAllowedTransitions(experiment.status);
@@ -52,6 +53,24 @@ async function updateStatus(id, newStatus) {
         );
         error.status = 400;
         throw error;
+    }
+
+    if (experiment.status === 'draft' && newStatus === 'running') {
+        const variants = await variantRepository.findByExperimentId(id);
+        if (variants.length < 2) {
+            const error = new Error('Experiment needs at least 2 variants before it can be started');
+            error.status = 400;
+            throw error;
+        }
+
+        const weightSum = await variantRepository.getSumOfWeights(id);
+        if (weightSum !== 100) {
+            const error = new Error(
+                `Variant weights must sum to exactly 100 before starting. Current total: ${weightSum}`
+            );
+            error.status = 400;
+            throw error;
+        }
     }
 
     const updated = await experimentRepository.updateStatus(id, newStatus);

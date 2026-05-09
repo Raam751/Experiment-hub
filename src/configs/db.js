@@ -1,17 +1,16 @@
 const { Pool } = require('pg');
+const logger = require('./logger');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
-// Log when the pool connects (useful for debugging)
 pool.on('connect', () => {
-    console.log('Connected to PostgreSQL');
+    logger.info('Connected to PostgreSQL');
 });
 
 pool.on('error', (err) => {
-    console.error('Unexpected PostgreSQL error:', err);
-    process.exit(-1);
+    logger.error({ err }, 'Unexpected PostgreSQL pool error');
 });
 
 module.exports = {

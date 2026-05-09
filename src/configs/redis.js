@@ -1,29 +1,29 @@
 const Redis = require('ioredis');
+const logger = require('./logger');
 
 let redis = null;
 
-// Only connect to Redis if REDIS_URL is provided
 if (process.env.REDIS_URL) {
     redis = new Redis(process.env.REDIS_URL, {
         maxRetriesPerRequest: 3,
         retryStrategy(times) {
             if (times > 3) {
-                console.warn('Redis unavailable after 3 retries — running without cache');
-                return null; // stop retrying
+                logger.warn('Redis unavailable after 3 retries — running without cache');
+                return null;
             }
             return Math.min(times * 50, 2000);
         }
     });
 
     redis.on('connect', () => {
-        console.log('Connected to Redis');
+        logger.info('Connected to Redis');
     });
 
     redis.on('error', (err) => {
-        console.error('Redis error:', err.message);
+        logger.error({ err: err.message }, 'Redis error');
     });
 } else {
-    console.log('REDIS_URL not set — running without cache (all reads go to DB)');
+    logger.info('REDIS_URL not set — running without cache');
 }
 
 module.exports = redis;

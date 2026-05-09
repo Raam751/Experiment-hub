@@ -24,15 +24,32 @@ async function findById(id) {
 }
 
 async function update(id, { name, weight, isControl }) {
+    const setClauses = [];
+    const params = [];
+
+    if (name !== undefined) {
+        params.push(name);
+        setClauses.push(`name = $${params.length}`);
+    }
+    if (weight !== undefined) {
+        params.push(weight);
+        setClauses.push(`weight = $${params.length}`);
+    }
+    if (isControl !== undefined) {
+        params.push(isControl);
+        setClauses.push(`is_control = $${params.length}`);
+    }
+
+    if (setClauses.length === 0) {
+        return await findById(id);
+    }
+
+    setClauses.push('updated_at = NOW()');
+    params.push(id);
+
     const result = await db.query(
-        `UPDATE variants
-         SET name = COALESCE($1, name),
-             weight = COALESCE($2, weight),
-             is_control = COALESCE($3, is_control),
-             updated_at = NOW()
-         WHERE id = $4
-         RETURNING *`,
-        [name, weight, isControl, id]
+        `UPDATE variants SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`,
+        params
     );
     return result.rows[0];
 }

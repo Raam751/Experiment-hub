@@ -1,19 +1,29 @@
 import { useState, useEffect } from 'react';
-import { getExperiments, createExperiment, deleteExperiment } from '../api';
+import { useNavigate } from 'react-router-dom';
+import { getExperiments, getExperimentStats, createExperiment, deleteExperiment } from '../api';
+import { useIsAdmin } from '../contexts/UserContext';
 
-export default function DashboardPage({ onSelectExperiment }) {
+export default function DashboardPage() {
+  const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   const [experiments, setExperiments] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const fetchExperiments = async () => {
     try {
-      const data = await getExperiments();
+      const [data, statsData] = await Promise.all([
+        getExperiments(),
+        getExperimentStats()
+      ]);
       setExperiments(Array.isArray(data) ? data : data.data || []);
+      setStats(statsData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -39,19 +49,14 @@ export default function DashboardPage({ onSelectExperiment }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this experiment?')) return;
     try {
       await deleteExperiment(id);
+      setConfirmDelete(null);
       fetchExperiments();
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
-
-  const statusCounts = experiments.reduce((acc, e) => {
-    acc[e.status] = (acc[e.status] || 0) + 1;
-    return acc;
-  }, {});
 
   return (
     <div className="container">
@@ -62,22 +67,34 @@ export default function DashboardPage({ onSelectExperiment }) {
             {experiments.length} experiment{experiments.length !== 1 ? 's' : ''} total
           </p>
         </div>
-        <button id="create-experiment-btn" className="btn btn-primary" onClick={() => setShowModal(true)}>
-          + New Experiment
-        </button>
+        {isAdmin && (
+          <button id="create-experiment-btn" className="btn btn-primary" onClick={() => setShowModal(true)}>
+            + New Experiment
+          </button>
+        )}
       </div>
 
-      {/* Status Summary */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-        {['draft', 'running', 'paused', 'ended'].map(s => (
-          <div key={s} className="card" style={{ padding: '12px 20px', flex: 1, cursor: 'default' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{statusCounts[s] || 0}</div>
-            <div className={`badge badge-${s}`} style={{ marginTop: 4 }}>{s}</div>
-          </div>
-        ))}
-      </div>
+      {/* Platform Stats */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>
+          {[
+            { label: 'Total', value: stats.total_experiments, color: 'var(--accent)' },
+            { label: 'Running', value: stats.running, color: 'var(--green)' },
+            { label: 'Draft', value: stats.draft, color: 'var(--blue)' },
+            { label: 'Paused', value: stats.paused, color: 'var(--yellow)' },
+            { label: 'Ended', value: stats.ended, color: 'var(--red)' },
+            { label: 'Events', value: (stats.total_events || 0).toLocaleString(), color: 'var(--accent)' },
+            { label: 'Users', value: (stats.unique_users || 0).toLocaleString(), color: 'var(--accent)' },
+          ].map(s => (
+            <div key={s.label} className="card" style={{ padding: '14px 18px', cursor: 'default', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {error && <div className="error-msg">{error}</div>}
+      {error && <div className="error-msg">{error} <span onClick={() => setError('')} style={{ cursor: 'pointer', float: 'right', fontWeight: 600 }}>✕</span></div>}
 
       {loading ? (
         <div className="empty-state"><span className="spinner" /></div>
@@ -89,7 +106,7 @@ export default function DashboardPage({ onSelectExperiment }) {
       ) : (
         <div className="grid grid-2">
           {experiments.map(exp => (
-            <div key={exp.id} className="card" onClick={() => onSelectExperiment(exp.id)}
+            <div key={exp.id} className="card" onClick={() => navigate(`/experiments/${exp.id}`)}
               style={{ cursor: 'pointer' }}>
               <div className="card-header">
                 <span className="card-title">{exp.name}</span>
@@ -102,8 +119,8 @@ export default function DashboardPage({ onSelectExperiment }) {
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                   Created {new Date(exp.created_at).toLocaleDateString()}
                 </span>
-                {exp.status === 'draft' && (
-                  <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(exp.id); }}>
+                {isAdmin && exp.status === 'draft' && (
+                  <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); setConfirmDelete(exp.id); }}>
                     Delete
                   </button>
                 )}
@@ -136,6 +153,22 @@ export default function DashboardPage({ onSelectExperiment }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <h2 className="modal-title">Delete Experiment?</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
+              This action cannot be undone. The experiment and all its variants will be permanently removed.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => handleDelete(confirmDelete)}>Delete</button>
+            </div>
           </div>
         </div>
       )}

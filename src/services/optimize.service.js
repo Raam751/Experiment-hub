@@ -6,9 +6,14 @@ async function triggerOptimization(experimentId) {
     // 1. Get the absolute latest, freshly computed metrics
     const metrics = await metricsService.computeAndGetMetrics(experimentId);
     
-    // We need at least 2 variants to run an A/B test optimization
+    if (metrics.length === 0) {
+        const error = new Error('No event data found. Simulate traffic first to generate exposure and conversion data before optimizing.');
+        error.status = 400;
+        throw error;
+    }
+
     if (metrics.length < 2) {
-        const error = new Error('Experiment needs at least 2 variants to optimize');
+        const error = new Error('Need event data for at least 2 variants to optimize. Make sure all variants have received traffic.');
         error.status = 400;
         throw error;
     }
@@ -45,9 +50,8 @@ async function triggerOptimization(experimentId) {
         const data = await response.json();
         return data; // returns the updated weights payload from Python
     } catch (err) {
-        console.error('Failed to trigger optimization:', err.message);
-        console.error('Bandit URL was:', `${banditUrl}/optimize`);
-        console.error('Full error:', err);
+        const logger = require('../configs/logger');
+        logger.error({ err, banditUrl: `${banditUrl}/optimize` }, 'Failed to trigger optimization');
         const error = new Error(`Failed to communicate with the Optimization Bandit Service: ${err.message}`);
         error.status = 502; // Bad Gateway
         throw error;

@@ -69,11 +69,27 @@ async function remove(id) {
     return result.rows[0];
 }
 
+async function getStats() {
+    const result = await db.query(`
+        SELECT
+            COUNT(*)::int AS total_experiments,
+            COUNT(*) FILTER (WHERE status = 'running')::int AS running,
+            COUNT(*) FILTER (WHERE status = 'draft')::int AS draft,
+            COUNT(*) FILTER (WHERE status = 'paused')::int AS paused,
+            COUNT(*) FILTER (WHERE status = 'ended')::int AS ended,
+            COALESCE((SELECT COUNT(*)::int FROM events), 0) AS total_events,
+            COALESCE((SELECT COUNT(DISTINCT user_id)::int FROM events), 0) AS unique_users
+        FROM experiments
+    `);
+    return result.rows[0];
+}
+
 module.exports = {
     create,
     findAll,
     findById,
     updateMetadata,
     updateStatus,
-    remove
+    remove,
+    getStats
 };

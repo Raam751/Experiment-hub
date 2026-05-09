@@ -1,17 +1,3 @@
-/**
- * Simple migration runner.
- * Reads .sql files from this directory in alphabetical order and executes them.
- * 
- * Usage: npm run migrate
- * 
- * Design notes:
- * - Uses IF NOT EXISTS so migrations are safe to re-run (idempotent).
- * - Runs each file inside a transaction so a single broken migration
- *   won't leave the DB in a half-migrated state.
- * - Minimal by design — no rollback support. For a student project,
- *   you can just drop and recreate tables during development.
- */
-
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
@@ -21,10 +7,23 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
+async function ensureMigrationsTable(client) {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            filename VARCHAR(255) PRIMARY KEY,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+}
+
+async function getAppliedMigrations(client) {
+    const result = await client.query('SELECT filename FROM schema_migrations ORDER BY filename');
+    return new Set(result.rows.map(r => r.filename));
+}
+
 async function runMigrations() {
     const migrationsDir = __dirname;
 
-    // Read all .sql files, sorted alphabetically (001_, 002_, etc.)
     const files = fs.readdirSync(migrationsDir)
         .filter(f => f.endsWith('.sql'))
         .sort();
@@ -34,33 +33,50 @@ async function runMigrations() {
     const client = await pool.connect();
 
     try {
+        await ensureMigrationsTable(client);
+        const applied = await getAppliedMigrations(client);
+
+        let ranCount = 0;
+
         for (const file of files) {
+            if (applied.has(file)) {
+                console.log(`-- Skipping (already applied): ${file}`);
+                continue;
+            }
+
             const filePath = path.join(migrationsDir, file);
             const sql = fs.readFileSync(filePath, 'utf-8').trim();
 
             if (!sql) {
-                console.log(`⏭  Skipping empty file: ${file}`);
+                console.log(`-- Skipping empty file: ${file}`);
                 continue;
             }
 
-            console.log(`▶  Running: ${file}`);
+            console.log(`>> Running: ${file}`);
 
             try {
                 await client.query('BEGIN');
                 await client.query(sql);
+                await client.query(
+                    'INSERT INTO schema_migrations (filename) VALUES ($1)',
+                    [file]
+                );
                 await client.query('COMMIT');
-                console.log(`✅ Success: ${file}\n`);
+                console.log(`   OK: ${file}\n`);
+                ranCount++;
             } catch (err) {
                 await client.query('ROLLBACK');
-                console.error(`❌ Failed: ${file}`);
+                console.error(`   FAILED: ${file}`);
                 console.error(`   Error: ${err.message}\n`);
-                // Stop on first failure — don't run later migrations
-                // that might depend on this one
                 process.exit(1);
             }
         }
 
-        console.log('All migrations completed successfully.');
+        if (ranCount === 0) {
+            console.log('\nAll migrations already applied. Nothing to do.');
+        } else {
+            console.log(`\nSuccessfully applied ${ranCount} new migration(s).`);
+        }
     } finally {
         client.release();
         await pool.end();

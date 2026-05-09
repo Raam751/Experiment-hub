@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const experimentController = require('../controllers/experiment.controller');
+const assignmentController = require('../controllers/assignment.controller');
 const { authenticate } = require('../middlewares/auth.middleware');
 const { authorize } = require('../middlewares/role.middleware');
 
@@ -9,6 +10,9 @@ router.use(authenticate);
 
 // POST   /experiments          — admin only
 router.post('/', authorize('admin'), experimentController.create);
+
+// GET    /experiments/stats    — admin & viewer
+router.get('/stats', experimentController.getStats);
 
 // GET    /experiments          — admin & viewer
 router.get('/', experimentController.findAll);
@@ -24,5 +28,8 @@ router.patch('/:id/status', authorize('admin'), experimentController.updateStatu
 
 // DELETE /experiments/:id      — admin only (draft experiments only)
 router.delete('/:id', authorize('admin'), experimentController.remove);
+
+// GET /experiments/:id/assignment-preview?user_id=xxx — admin & viewer
+router.get('/:id/assignment-preview', assignmentController.previewAssignment);
 
 module.exports = router;

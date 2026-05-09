@@ -50,7 +50,8 @@ async function updateVariantWeights(experimentId, weightsDict) {
         await client.query('COMMIT');
     } catch (e) {
         await client.query('ROLLBACK');
-        console.error('Transaction failed during weight update', e);
+        const logger = require('../configs/logger');
+        logger.error({ err: e, experimentId }, 'Transaction failed during weight update');
         const error = new Error(e.message || 'Failed to update weights');
         error.status = 400;
         throw error;

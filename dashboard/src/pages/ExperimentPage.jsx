@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getExperiment, getVariants, getMetrics, updateExperimentStatus, createVariant, triggerOptimize } from '../api';
+import TrafficBar from '../components/TrafficBar';
+import MetricsPanel from '../components/MetricsPanel';
+import SimulatorPanel from '../components/SimulatorPanel';
+import OptimizationResult from '../components/OptimizationResult';
+import AssignmentTester from '../components/AssignmentTester';
+import { useIsAdmin } from '../contexts/UserContext';
 
-export default function ExperimentPage({ experimentId, onBack }) {
+export default function ExperimentPage() {
+  const { id: experimentId } = useParams();
+  const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   const [experiment, setExperiment] = useState(null);
   const [variants, setVariants] = useState([]);
   const [metrics, setMetrics] = useState([]);
@@ -9,8 +19,10 @@ export default function ExperimentPage({ experimentId, onBack }) {
   const [error, setError] = useState('');
   const [optimizing, setOptimizing] = useState(false);
   const [optimizeResult, setOptimizeResult] = useState(null);
+  const [beforeWeights, setBeforeWeights] = useState([]);
   const [showAddVariant, setShowAddVariant] = useState(false);
   const [variantForm, setVariantForm] = useState({ name: '', weight: '', is_control: false });
+  const [actionLoading, setActionLoading] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -20,7 +32,6 @@ export default function ExperimentPage({ experimentId, onBack }) {
       ]);
       setExperiment(exp);
       setVariants(vars);
-      // Only fetch metrics if experiment has been running
       if (['running', 'paused', 'ended'].includes(exp.status)) {
         const m = await getMetrics(experimentId, true);
         setMetrics(m.data || []);
@@ -35,36 +46,42 @@ export default function ExperimentPage({ experimentId, onBack }) {
   useEffect(() => { fetchData(); }, [experimentId]);
 
   const handleStatusChange = async (newStatus) => {
+    setActionLoading(newStatus);
+    setError('');
     try {
       await updateExperimentStatus(experimentId, newStatus);
       fetchData();
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleAddVariant = async (e) => {
     e.preventDefault();
+    setError('');
     try {
       await createVariant(experimentId, variantForm.name, parseInt(variantForm.weight), variantForm.is_control);
       setShowAddVariant(false);
       setVariantForm({ name: '', weight: '', is_control: false });
       fetchData();
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
   const handleOptimize = async () => {
+    setBeforeWeights([...variants]);
     setOptimizing(true);
     setOptimizeResult(null);
+    setError('');
     try {
       const result = await triggerOptimize(experimentId);
       setOptimizeResult(result.data);
-      // Refresh variants to show new weights
       setTimeout(fetchData, 500);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     } finally {
       setOptimizing(false);
     }
@@ -74,23 +91,28 @@ export default function ExperimentPage({ experimentId, onBack }) {
   if (!experiment) return <div className="container"><div className="error-msg">{error || 'Not found'}</div></div>;
 
   const statusActions = {
-    draft: [{ label: '▶ Start', status: 'running', cls: 'btn-success' }],
+    draft: [{ label: 'Start Experiment', status: 'running', cls: 'btn-success' }],
     running: [
-      { label: '⏸ Pause', status: 'paused', cls: 'btn-secondary' },
-      { label: '⏹ End', status: 'ended', cls: 'btn-danger' }
+      { label: 'Pause', status: 'paused', cls: 'btn-secondary' },
+      { label: 'End', status: 'ended', cls: 'btn-danger' }
     ],
     paused: [
-      { label: '▶ Resume', status: 'running', cls: 'btn-success' },
-      { label: '⏹ End', status: 'ended', cls: 'btn-danger' }
+      { label: 'Resume', status: 'running', cls: 'btn-success' },
+      { label: 'End', status: 'ended', cls: 'btn-danger' }
     ],
     ended: []
   };
 
+  const isRunning = experiment.status === 'running';
+  const hasData = metrics.length > 0;
+
   return (
     <div className="container">
-      <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ marginBottom: 20 }}>← Back</button>
+      <button className="btn btn-secondary btn-sm" onClick={() => navigate('/')} style={{ marginBottom: 20 }}>
+        ← Back to Experiments
+      </button>
 
-      {/* Header */}
+      {/* ---- Header Card ---- */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header">
           <div>
@@ -99,44 +121,70 @@ export default function ExperimentPage({ experimentId, onBack }) {
           </div>
           <span className={`badge badge-${experiment.status}`}>{experiment.status}</span>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {(statusActions[experiment.status] || []).map(a => (
-            <button key={a.status} className={`btn ${a.cls} btn-sm`}
-              onClick={() => handleStatusChange(a.status)}>{a.label}</button>
-          ))}
-          {experiment.status === 'running' && (
-            <button id="optimize-btn" className="btn btn-primary btn-sm" onClick={handleOptimize} disabled={optimizing}>
-              {optimizing ? <><span className="spinner" /> Optimizing...</> : '🧠 Optimize Traffic (Thompson Sampling)'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {error && <div className="error-msg">{error}</div>}
-
-      {/* Optimize Result */}
-      {optimizeResult && (
-        <div className="optimize-result">
-          <strong>🧠 Thompson Sampling Result</strong>
-          <p style={{ color: 'var(--text-secondary)', marginTop: 8, fontSize: '0.9rem' }}>
-            The Bayesian bandit algorithm analyzed conversion data and recalculated optimal traffic allocation:
-          </p>
-          <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
-            {optimizeResult.updated_weights?.map(w => (
-              <div key={w.variant_id} className="card" style={{ flex: 1, padding: 16, textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--accent)' }}>{w.new_weight}%</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Variant {w.variant_id}</div>
-              </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {(statusActions[experiment.status] || []).map(a => (
+              <button key={a.status} className={`btn ${a.cls} btn-sm`}
+                onClick={() => handleStatusChange(a.status)} disabled={actionLoading !== null}>
+                {actionLoading === a.status ? <span className="spinner" /> : a.label}
+              </button>
             ))}
           </div>
+        )}
+      </div>
+
+      {error && <div className="error-msg">{error} <span onClick={() => setError('')} style={{ cursor: 'pointer', float: 'right', fontWeight: 600 }}>✕</span></div>}
+
+      {/* ---- Traffic Allocation Bar ---- */}
+      {variants.length > 0 && <TrafficBar variants={variants} />}
+
+      {/* ---- Metrics Panel ---- */}
+      {['running', 'paused', 'ended'].includes(experiment.status) && (
+        <MetricsPanel variants={variants} metrics={metrics} />
+      )}
+
+      {/* ---- Simulator (running + admin only) ---- */}
+      {isRunning && isAdmin && (
+        <SimulatorPanel experimentId={experimentId} variants={variants} onSimulated={fetchData} />
+      )}
+
+      {/* ---- Optimization Section (running + admin only) ---- */}
+      {isRunning && isAdmin && (
+        <div className="section">
+          <div className="section-label">Bayesian Optimization</div>
+          <div className="card" style={{ padding: 20 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 16 }}>
+              Run Thompson Sampling to recalculate optimal traffic allocation based on observed conversion data.
+              The algorithm draws 10,000 Monte Carlo samples from each variant's Beta distribution and shifts traffic toward the winner.
+            </p>
+            <button id="optimize-btn" className="btn btn-primary" onClick={handleOptimize} disabled={optimizing || !hasData}
+              style={{ width: '100%', justifyContent: 'center' }}>
+              {optimizing
+                ? <><span className="spinner" /> Running Thompson Sampling...</>
+                : !hasData
+                  ? 'Simulate traffic first to generate data'
+                  : 'Optimize Traffic Allocation'}
+            </button>
+          </div>
+
+          {optimizeResult && (
+            <OptimizationResult
+              beforeWeights={beforeWeights}
+              afterWeights={optimizeResult.updated_weights || []}
+              variants={variants}
+            />
+          )}
         </div>
       )}
 
-      {/* Variants Section */}
+      {/* ---- Assignment Tester (running only) ---- */}
+      {isRunning && <AssignmentTester experimentId={experimentId} variants={variants} />}
+
+      {/* ---- Variants Section ---- */}
       <div className="section">
         <div className="section-title">
           Variants ({variants.length})
-          {experiment.status === 'draft' && (
+          {isAdmin && experiment.status === 'draft' && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddVariant(!showAddVariant)}>
               + Add Variant
             </button>
@@ -165,39 +213,15 @@ export default function ExperimentPage({ experimentId, onBack }) {
           </form>
         )}
 
-        {variants.map(v => {
-          const metric = metrics.find(m => m.variant_id === v.id);
-          return (
-            <div key={v.id} className="variant-row">
-              <div className="variant-name">
-                {v.name}
-                {v.is_control && <span className="variant-control-tag">CONTROL</span>}
-              </div>
-              <div className="variant-weight">{v.weight}%</div>
-              <div className="variant-meta">
-                {metric ? (
-                  <>
-                    <div style={{ display: 'flex', gap: 24, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      <span>Exposures: <strong style={{ color: 'var(--text-primary)' }}>{metric.exposures}</strong></span>
-                      <span>Conversions: <strong style={{ color: 'var(--text-primary)' }}>{metric.conversions}</strong></span>
-                      <span>Rate: <strong style={{ color: parseFloat(metric.conversion_rate) > 0.5 ? 'var(--green)' : 'var(--text-primary)' }}>
-                        {(parseFloat(metric.conversion_rate) * 100).toFixed(1)}%
-                      </strong></span>
-                    </div>
-                    <div className="metric-bar-wrap">
-                      <div className="metric-bar-bg">
-                        <div className={`metric-bar-fill ${parseFloat(metric.conversion_rate) > 0.5 ? 'green' : 'blue'}`}
-                          style={{ width: `${Math.min(parseFloat(metric.conversion_rate) * 100, 100)}%` }} />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No data yet</span>
-                )}
-              </div>
+        {variants.map(v => (
+          <div key={v.id} className="variant-row">
+            <div className="variant-name">
+              {v.name}
+              {v.is_control && <span className="variant-control-tag">CONTROL</span>}
             </div>
-          );
-        })}
+            <div className="variant-weight">{v.weight}%</div>
+          </div>
+        ))}
 
         {variants.length === 0 && (
           <div className="empty-state" style={{ padding: 30 }}>

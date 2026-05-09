@@ -47,11 +47,18 @@ async function remove(req, res) {
     res.status(204).send();
 }
 
+async function getStats(req, res) {
+    const experimentRepo = require('../repositories/experiment.repository');
+    const stats = await experimentRepo.getStats();
+    res.json(stats);
+}
+
 module.exports = {
     create,
     findAll,
     findById,
     updateMetadata,
     updateStatus,
-    remove
+    remove,
+    getStats
 };

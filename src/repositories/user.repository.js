@@ -15,7 +15,22 @@ async function findByEmail(email) {
     return result.rows[0];
 }
 
+async function findById(id) {
+    const result = await db.query('SELECT id, email, role, created_at FROM users WHERE id = $1', [id]);
+    return result.rows[0];
+}
+
+async function updateRole(id, role) {
+    const result = await db.query(
+        'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, role, created_at',
+        [role, id]
+    );
+    return result.rows[0];
+}
+
 module.exports = {
     createUser,
-    findByEmail
+    findByEmail,
+    findById,
+    updateRole
 }

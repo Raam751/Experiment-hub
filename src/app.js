@@ -36,10 +36,13 @@ app.use('/internal', require('./routes/internal.routes')); // API key — bandit
 app.use('/experiments', require('./routes/experiment.routes'));
 app.use('/experiments', require('./routes/metrics.routes'));
 app.use('/experiments', require('./routes/optimize.routes'));
+app.use('/experiments', require('./routes/simulate.routes'));
 app.use('/', require('./routes/variant.routes'));
 
+const logger = require('./configs/logger');
+
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    logger.error({ err, path: req.path, method: req.method }, err.message);
     res.status(err.status || 500).json({
         error: {
             message: err.message || 'Internal Server Error',

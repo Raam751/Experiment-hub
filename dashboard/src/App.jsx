@@ -1,48 +1,37 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ExperimentPage from './pages/ExperimentPage';
-import { isLoggedIn, clearToken } from './api';
+import IntegrationPage from './pages/IntegrationPage';
+import ArchitecturePage from './pages/ArchitecturePage';
+import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
+import { UserProvider } from './contexts/UserContext';
 
 function App() {
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
-  const [user, setUser] = useState(null);
-  const [selectedExperiment, setSelectedExperiment] = useState(null);
-
-  const handleLogin = (userData) => {
-    setUser(userData);
-    setLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    clearToken();
-    setLoggedIn(false);
-    setUser(null);
-    setSelectedExperiment(null);
-  };
-
-  if (!loggedIn) return <LoginPage onLogin={handleLogin} />;
-
   return (
-    <>
-      <nav className="navbar">
-        <span className="navbar-brand">⚡ ExperimentHub</span>
-        <div className="navbar-actions">
-          {user && <span className="navbar-user">{user.email} ({user.role})</span>}
-          <button id="logout-btn" className="btn btn-secondary btn-sm" onClick={handleLogout}>Logout</button>
-        </div>
-      </nav>
-
-      {selectedExperiment ? (
-        <ExperimentPage
-          experimentId={selectedExperiment}
-          onBack={() => setSelectedExperiment(null)}
-        />
-      ) : (
-        <DashboardPage onSelectExperiment={setSelectedExperiment} />
-      )}
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <UserProvider>
+                <Layout />
+              </UserProvider>
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="experiments/:id" element={<ExperimentPage />} />
+          <Route path="integration" element={<IntegrationPage />} />
+          <Route path="architecture" element={<ArchitecturePage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
