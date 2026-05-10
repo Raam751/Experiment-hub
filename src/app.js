@@ -10,7 +10,8 @@ const app = express();
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
-    process.env.FRONTEND_URL       // set this to your Vercel URL in production
+    'https://enterprise-feature-flag-bayesian-ex.vercel.app',
+    process.env.FRONTEND_URL
 ].filter(Boolean);
 
 app.use(cors({
