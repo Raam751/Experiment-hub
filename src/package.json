@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "jest --verbose",
     "dev": "nodemon server.js",
     "migrate": "node migrations/run.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "build": "npm install && node migrations/run.js"
   },
   "keywords": [],
   "author": "",
