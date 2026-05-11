@@ -1,13 +1,14 @@
 const { Pool } = require('pg');
 const logger = require('./logger');
 
-const isProduction = process.env.NODE_ENV === 'production' ||
-    (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com'));
+const dbUrl = process.env.DATABASE_URL || '';
+const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+const needsSSL = !isLocal && dbUrl.length > 0;
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isProduction ? { rejectUnauthorized: false } : false,
-    max: isProduction ? 5 : 10,
+    ssl: needsSSL ? { rejectUnauthorized: false } : false,
+    max: needsSSL ? 5 : 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
 });
