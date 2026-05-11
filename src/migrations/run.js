@@ -3,8 +3,12 @@ const path = require('path');
 const { Pool } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+const isProduction = process.env.NODE_ENV === 'production' ||
+    (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com'));
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
 async function ensureMigrationsTable(client) {
