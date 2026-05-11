@@ -25,6 +25,21 @@ async function getAppliedMigrations(client) {
     return new Set(result.rows.map(r => r.filename));
 }
 
+async function connectWithRetry(maxRetries = 5) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const client = await pool.connect();
+            return client;
+        } catch (err) {
+            console.error(`Connection attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+            if (attempt === maxRetries) throw err;
+            const delay = attempt * 3000;
+            console.log(`Retrying in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
+        }
+    }
+}
+
 async function runMigrations() {
     const migrationsDir = __dirname;
 
@@ -34,7 +49,7 @@ async function runMigrations() {
 
     console.log(`Found ${files.length} migration files.\n`);
 
-    const client = await pool.connect();
+    const client = await connectWithRetry();
 
     try {
         await ensureMigrationsTable(client);
