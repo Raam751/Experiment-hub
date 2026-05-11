@@ -7,9 +7,14 @@ const dbUrl = process.env.DATABASE_URL || '';
 const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
 const needsSSL = !isLocal && dbUrl.length > 0;
 
+const redacted = dbUrl.replace(/:([^@]+)@/, ':***@');
+console.log(`[migrate] DB URL: ${redacted || '(empty)'}`);
+console.log(`[migrate] SSL enabled: ${needsSSL}`);
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: needsSSL ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 15000,
 });
 
 async function ensureMigrationsTable(client) {
@@ -50,7 +55,15 @@ async function runMigrations() {
 
     console.log(`Found ${files.length} migration files.\n`);
 
-    const client = await connectWithRetry();
+    let client;
+    try {
+        client = await connectWithRetry();
+    } catch (err) {
+        console.error(`\n[migrate] WARNING: Could not connect to database. Skipping migrations.`);
+        console.error(`[migrate] The server will start, but tables may not exist yet.\n`);
+        await pool.end().catch(() => {});
+        return;
+    }
 
     try {
         await ensureMigrationsTable(client);
