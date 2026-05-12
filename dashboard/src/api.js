@@ -56,17 +56,23 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  if (res.status === 401) {
-    clearToken();
-    window.location.href = '/login';
-    throw new Error('Session expired. Please log in again.');
-  }
-
   let data;
   try {
     data = await res.json();
   } catch {
-    throw new Error('Server returned an unexpected response');
+    if (!res.ok) throw new Error('Server returned an unexpected response');
+    data = {};
+  }
+
+  const isAuthBypass =
+    path === '/auth/login' ||
+    path === '/auth/register' ||
+    path.startsWith('/auth/register'); // tolerate query strings if any
+
+  if (res.status === 401 && !isAuthBypass) {
+    clearToken();
+    window.location.href = '/login';
+    throw new Error('Session expired. Please log in again.');
   }
 
   if (!res.ok) throw new Error(data?.error?.message || data?.error || 'Request failed');
